@@ -1,0 +1,839 @@
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Data Preparation Part II
+
+In this part we will study different aircrafts types Using PCA
+
+## ACP
+
+the first variable was considered as a qualitative variable because it presents the different modalities of the Tunisair fleet 
+
+```{r}
+library(factoextra)
+library(FactoMineR)
+data <- read.table("delta.csv", sep=";", header=TRUE , dec=".")
+dataFLotte <- read.table("delta.csv", sep=";", header=TRUE , dec=".")
+View(dataFLotte)
+result_pca <- PCA(data, quali.sup=1)
+eig.val <- get_eigenvalue(result_pca)
+fviz_eig(result_pca, addlabels = TRUE, ylim = c(0, 50))
+```
+
+The correlation circle summarizes 65.2% of the total information only in the first and second axis
+if we include the 3rd axis we will have 80% of the total information
+
+## Projection on the first three axis:
+```{r }
+result_pca <- PCA(data, quali.sup=1)
+result_pca <- PCA(data, quali.sup=1,axes = 2:3)
+result_pca <- PCA(data, quali.sup=1,axes =c(1,3))
+
+library("corrplot")
+var <- get_pca_var(result_pca)
+corrplot(var$cos2, is.corr=FALSE)
+fviz_cos2(result_pca, choice = "var", axes = 1:2)
+fviz_cos2(result_pca, choice = "var", axes = 2:3)
+fviz_cos2(result_pca, choice = "var", axes = c(3,1))
+
+```
+
+The plots showed us that there are 3 clouds of individuals
+Unfortunately the interpretation seems a little difficult given the large number of variables to be studied. For this reason, we will eliminate variables that are not relevant and have a poor representation.
+We will consider the individual VIP as additional (since it presents a unique case) as well as the varibales 2,3,4 (relating to this individual VIP) and 24,25,26,27,28,29,30,31 , 32,33,34 which are binary variables giving information on the types of classes in each airplane, this is redundancy because the names of the variables give information on the existing classes.
+EXample: seat.width..FirstClass
+
+```{r }
+result=PCA(data,ind.sup =2,quanti.sup=c(2,3,4,24,25,26,27,28,29,30,31,32,33,34),quali.sup =1)
+fviz_pca_var(result, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Évite le chevauchement de texte,
+             
+)
+
+```
+
+From a business point of view, we decided to eliminate some variables such as WingSpan, tail.Height, mileRange, Engines to have accurate results, that's why we'll eliminate them While flying over the data, we noticed that there are two aspects to study: all that is related to the places and their classes (Business, EcoComfort ..;) and the other options.
+
+## Studying the "Seats" in the different classes
+
+Now , we are going to focus on the variables related to seats characteristics and try to reduce dimensionality
+
+```{r }
+dataSeats=data.frame(dataFLotte$Aircraft,dataFLotte$Seats..First.Class.,dataFLotte$Seats..Business.,dataFLotte$Seats..Eco.Comfort.,dataFLotte$Seats..Economy.,dataFLotte$Accommodation)
+
+result1=PCA(dataSeats,ind.sup =2,quali.sup =1)
+fviz_pca_var(result1, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Évite le chevauchement de texte,
+             
+)
+var <- get_pca_var(result1)
+library("corrplot")
+corrplot(var$cos2, is.corr=FALSE)
+fviz_cos2(result1, choice = "var", axes = 1:2)
+
+```
+<br>The accomodation variable informs us of the number of seats in each plane and the other variables (Seats first class, seats business, seats Economy and Seats economy comfort) provide information on the number of seats per class in the same plane.
+the circle in this case sums up more than 95% of the total information with a good quality of representation.
+
+
+we note that:
+
+-Accomodation, seats Eco comfort and Seats Economy are the most corrolated positively with the first axis
+
+-Seats First class is corrolated positively with the second axis
+
+on the other hand Seats business is negatively correlated with the second axis and positively with the first axis
+
+
+and if we project the individuals, we obtain the following information:
+
+-a first cloud positively corrolated with the first axis representing aircraft that specialize mainly in the classes Eco comfort, Economy and less importantly in Business class
+
+EXAMPLE: individual 14 having 376 places distributed as follows:
+
+Economy :286 places 
+          Eco Comfort :42 places 
+          Business :48 places 
+          
+
+-A second cloud of points correlated positively with the axis 2 which represents the planes which have more places in First class
+taking the example of the individual 28 having the highest number of first class places: 36 places
+
+
+_a third point cloud correlated negatively with the two axes having a small number of places compared to the other planes
+Example the individual 38 having a total of 28 places.
+
+```{r }
+fviz_pca_ind(result1,
+             geom.ind = "point", # Montre les points seulement (mais pas le "text")
+             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+             addEllipses = TRUE, # Ellipses de concentration
+             legend.title = "Groups"
+             
+          
+)
+
+fviz_pca_biplot(result1, axes = c(1, 2),
+    label = "all", invisible = "none", labelsize = 4, pointsize = 2)
+
+```
+
+## Clustering :CAH and Kmeans
+
+```{r }
+View(dataSeats)
+boxplot(dataSeats[,2:5],names = c("First Class","business","Eco Comfort","Economy"))
+
+#ScaledSeats=scale(dataSeats[,2:5], center = TRUE, scale = TRUE)
+#boxplot(ScaledSeats[,],names = c("First Class","business","Eco #Comfort","Economy"))
+```
+
+## 1-CAH method :
+
+```{r }
+#la matrice des distances entre tt les individus   
+matrix=dist(dataSeats[,], method = "manhattan", diag = FALSE, upper = FALSE, p = 2)
+
+#clustering avec la methode compléte
+h1=hclust(matrix, method = "complete", members = NULL)
+plot(h1, main = "Dendrogramme avec methode d'agg complete")
+
+
+#clustering avec la methode wadr D2
+h2=hclust(matrix, method = "ward.D2", members = NULL)
+plot(h1, main = "Dendrogramme avec methode ward D2")
+```
+
+we note that in the two segmentations CAH we found that the same element 14 is still an aberrated value this individuals is characterized by the largest number of seats dedicated to the economy class
+We will see the output of the segmentation by eliminating this element
+
+```{r }
+#la matrice des distances entre tt les individus  
+ 
+dataSeats1=dataSeats[-c(14),]
+#la matrice des distances entre tt les individus   
+matrix=dist(dataSeats1[,], method = "manhattan", diag = FALSE, upper = FALSE, p = 2)
+
+#clustering avec la methode compléte
+h1=hclust(matrix, method = "complete", members = NULL)
+plot(h1, main = "Dendrogramme avec methode d'agg complete")
+
+
+#clustering avec la methode wadr D2
+
+h2=hclust(matrix, method = "ward.D2", members = NULL)
+plot(h1, main = "Dendrogramme avec methode ward D2")
+
+```
+
+<br> we had the same result by applying the method Ward D2 and the complete method
+```{r }
+inertie <- sort(h2$height, decreasing = TRUE)
+plot(inertie[1:10], type = "s", xlab = "Nombre de classes", 
+     ylab = "Inertie")
+points(c(2, 3, 4,6), inertie[c(2, 3,4,6)], col = c("green3", 
+                                               "red3", "blue3","yellow3"), cex = 2, lwd = 3)
+```
+
+We can see that we can segment our data in 2, 3 or 4 clusters
+
+```{r }
+groupes.cah <- cutree(h2,k=3 )
+plot(groupes.cah)
+barplot(table(groupes.cah))
+dataSeatsClasseCAH3=data.frame(dataSeats1,groupes.cah)
+classe1=dataSeatsClasseCAH3[which(dataSeatsClasseCAH3$groupes.cah==1),]
+classe2=dataSeatsClasseCAH3[which(dataSeatsClasseCAH3$groupes.cah==2),]
+classe3=dataSeatsClasseCAH3[which(dataSeatsClasseCAH3$groupes.cah==3),]
+dataSeatsClasseCAH3
+```
+
+number of seats in first class ;clustering with CAH 3 clusters 
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..First.Class.,classe2$dataFLotte.Seats..First.Class.,classe3$dataFLotte.Seats..First.Class.)
+```
+
+
+number of seats in Business class ;clustering with CAH 3 clusters 
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Business.,classe2$dataFLotte.Seats..Business.,classe3$dataFLotte.Seats..Business.)
+
+```
+
+number of seats in Eco.Comfort class ;clustering with CAH 3 clusters 
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Eco.Comfort.,classe2$dataFLotte.Seats..Eco.Comfort.,classe3$dataFLotte.Seats..Eco.Comfort.)
+```
+
+#number of seats in Economy class ;clustering with CAH 3 clusters 
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Economy.,classe2$dataFLotte.Seats..Economy.,classe3$dataFLotte.Seats..Economy.)
+```
+
+```{r }
+groupes.cah <- cutree(h2,k=4 )
+plot(groupes.cah)
+barplot(table(groupes.cah))
+
+dataSeatsClasseCAH4=data.frame(dataSeats1,groupes.cah)
+classe1=dataSeatsClasseCAH4[which(dataSeatsClasseCAH4$groupes.cah==1),]
+classe2=dataSeatsClasseCAH4[which(dataSeatsClasseCAH4$groupes.cah==2),]
+classe3=dataSeatsClasseCAH4[which(dataSeatsClasseCAH4$groupes.cah==3),]
+classe4=dataSeatsClasseCAH4[which(dataSeatsClasseCAH4$groupes.cah==4),]
+dataSeatsClasseCAH4
+```
+
+number of seats in first class ;clustering  CAH with 4 class
+
+```{r}
+boxplot(classe1$dataFLotte.Seats..First.Class.,classe2$dataFLotte.Seats..First.Class.,classe3$dataFLotte.Seats..First.Class.,classe4$dataFLotte.Seats..First.Class.)
+```
+
+number of seats in Business class;clustering  CAH with 4 class
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Business.,classe2$dataFLotte.Seats..Business.,classe3$dataFLotte.Seats..Business.,classe4$dataFLotte.Seats..Business.)
+```
+
+
+
+number of seats in Eco.Comfort class;clustering  CAH with 4 class
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Eco.Comfort.,classe2$dataFLotte.Seats..Eco.Comfort.,classe3$dataFLotte.Seats..Eco.Comfort.,classe4$dataFLotte.Seats..Eco.Comfort.)
+```
+
+
+number of seats in Economy class;clustering  CAH with 4 class
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Economy.,classe2$dataFLotte.Seats..Economy.,classe3$dataFLotte.Seats..Economy.,classe4$dataFLotte.Seats..Economy.)
+```
+
+now project the classes on the factorial plane using PCA to have more information of caracteristics of our clusters
+
+```{r }
+res <- HCPC(result1,graph = FALSE)
+plot(res, choice = "3D.map")
+
+plot(res, choice = "tree")
+plot(res, choice = "bar")
+plot(res, choice = "map")
+fviz_dend(res, 
+          cex = 0.7,                     # Taille du text
+          palette = "jco",               # Palette de couleur ?ggpubr::ggpar
+          rect = TRUE, rect_fill = TRUE, # Rectangle autour des groupes
+          rect_border = "jco",           # Couleur du rectangle
+          labels_track_height = 0.8 )
+fviz_cluster(res,
+            repel = TRUE,            # Evite le chevauchement des textes
+            show.clust.cent = TRUE, # Montre le centre des clusters
+            palette = "jco",         # Palette de couleurs, voir ?ggpubr::ggpar
+            ggtheme = theme_minimal(),
+            main = "Factor map"
+)
+```
+
+## Kmeans method :
+
+```{r }
+result=kmeans(dataSeats[,2:6],3)
+result
+seatsclasse=data.frame(dataSeats,result$cluster)
+View(seatsclasse)
+classe1=seatsclasse[which(seatsclasse$result.cluster==1),]
+classe2=seatsclasse[which(seatsclasse$result.cluster==2),]
+classe3=seatsclasse[which(seatsclasse$result.cluster==3),]
+```
+
+number of seats in first class
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..First.Class.,classe2$dataFLotte.Seats..First.Class.,classe3$dataFLotte.Seats..First.Class.)
+```
+
+number of seats in business class
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Business.,classe2$dataFLotte.Seats..Business.,classe3$dataFLotte.Seats..Business.)
+```
+
+
+
+number of seats in Eco Comfort 
+
+```{r }
+boxplot(classe1$dataFLotte.Seats..Eco.Comfort.,classe2$dataFLotte.Seats..Eco.Comfort.,classe3$dataFLotte.Seats..Eco.Comfort.)
+```
+
+number of seats in Economic class
+```{r }
+boxplot(classe1$dataFLotte.Seats..Economy.,classe2$dataFLotte.Seats..Economy.,classe3$dataFLotte.Seats..Economy.)
+```
+
+
+number of total seats for each cluster 
+
+```{r }
+boxplot(classe1$dataFLotte.Accommodation,classe2$dataFLotte.Accommodation,classe3$dataFLotte.Accommodation)
+
+```
+
+this segmentation reminds us of the one made by PCA
+
+
+```{r }
+seatsclasse[,7]=as.factor(seatsclasse[,7])
+result2=PCA(seatsclasse,ind.sup =2,quali.sup =c(1,7))
+
+
+plot.PCA(result2,choix="ind",habillage=7)
+
+
+
+```
+## PCA about secondary options :
+
+```{r}
+library(factoextra)
+library(FactoMineR)
+
+#data:
+dataFLotteopt = read.table("delta.csv", sep=";", header=TRUE , dec=".")
+
+View(dataFLotteopt)
+summary(dataFLotteopt)
+
+
+dataopt=data.frame(dataFLotteopt$Aircraft,dataFLotteopt$Length..ft.,dataFLotteopt$Wifi,dataFLotteopt$Video,dataFLotteopt$Power,dataFLotteopt$Satellite,dataFLotteopt$Flat.bed)
+View(dataopt)
+result7=PCA(dataopt,quali.sup =1)
+
+```
+
+inertia distribution :
+
+```{r}
+
+eig.val <- get_eigenvalue(result7)
+fviz_eig(result7, addlabels = TRUE, ylim = c(0, 50))
+```
+#correlation of variables (opt) :
+
+```{r}
+
+fviz_pca_var(result7, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Évite le chevauchement de texte,
+             
+)
+```
+
+
+```{r}
+#projection quality of options in dim 1 and 2:
+fviz_cos2(result7, choice = "var", axes = 1:2)
+
+```
+
+```{r}
+#plot of airline:
+fviz_pca_ind(result7,
+             geom.ind = "point", # Montre les points seulement (mais pas le "text")
+             palette = c("#00AFBB", "#E7B800", "#FC4E07"),
+             addEllipses = TRUE, # Ellipses de concentration
+             legend.title = "Groups"
+             
+             
+)
+```
+ the following graph shows us:
+ * satellite option is strongly positively correlated with 2nd axis
+ * options: power, flatbed video and airplane length are positively correlated with 1st axis
+ * wifi option is positively correlated with 2nd axis and negatively with the first
+ This is 3 remarks help us to distinguish the following results:
+ * The aircraft 10,12,21 and 26 (Boeing 737-700 (73W), Boeing 737-800 (73H), Boeing 757-200 (75X), Boeing 767-300 (76Q)), generally the boeing plane, contain this options among other aircraft
+For example, aircraft number 14 (Boeing 747-400 (74S)) contain most of the options (power, length, flatbed, video)
+ * also planes 38 (E120) and 41 (ERJ-145) do not contain any options (they are distorted for economy class)
+ 
+projection of individuals(airlines):
+
+```{r}
+
+fviz_pca_biplot(result7, axes = c(1, 2),
+                label = "all", invisible = "none", labelsize = 4, pointsize = 2)
+
+
+
+
+```
+ numbers of planes by options: 
+ 
+```{r}
+dataopt=as.matrix(dataopt)
+barplot(dataopt[,3:7],names = c("wifi","video","power","satellite","flat-bed"),main="nombres des avions par options",xlab="les options",ylab="nombre des avions")
+
+```
+
+fleet segmentation with options of airline:
+
+1/db-scan:Density-based spatial clustering of applications with noise: 
+
+```{r}
+dataopt=as.data.frame(dataopt)
+str(dataopt)
+dataopt$dataFLotteopt.Length..ft.=as.numeric(dataopt$dataFLotteopt.Length..ft.)
+dataopt$dataFLotteopt.Wifi=as.numeric(dataopt$dataFLotteopt.Wifi)
+dataopt$dataFLotteopt.Video=as.numeric(dataopt$dataFLotteopt.Video)
+dataopt$dataFLotteopt.Power=as.numeric(dataopt$dataFLotteopt.Power)
+dataopt$dataFLotteopt.Satellite=as.numeric(dataopt$dataFLotteopt.Satellite)
+dataopt$dataFLotteopt.Flat.bed=as.numeric(dataopt$dataFLotteopt.Flat.bed)
+str(dataopt)
+d=dataopt[,2:7]
+```
+
+
+```{r}
+library("dbscan")
+library("ANN2")
+library("ggplot2")
+
+#run dbscan
+db <- dbscan(d, eps = 1, minPts = 3)
+db
+#Scatterplot Matrices entre les options
+plot(d, col=db$cluster)
+hullplot(d, db)
+#6 clusters
+```
+```{r}
+
+dataOption=data.frame(d,db$cluster)
+
+classe1=dataOption[which(dataOption$db.cluster==1),]
+classe2=dataOption[which(dataOption$db.cluster==2),]
+classe3=dataOption[which(dataOption$db.cluster==3),]
+classe4=dataOption[which(dataOption$db.cluster==4),]
+classe5=dataOption[which(dataOption$db.cluster==5),]
+classe6=dataOption[which(dataOption$db.cluster==6),]
+dataOption
+View(dataOption)
+```
+option length with 6 clusters of db-scan
+
+```{r}
+boxplot(classe1$dataFLotteopt.Length..ft.,classe2$dataFLotteopt.Length..ft.,classe3$dataFLotteopt.Length..ft.,classe4$dataFLotteopt.Length..ft.,classe5$dataFLotteopt.Length..ft.,classe6$dataFLotteopt.Length..ft.,col="violet")
+```
+option wifi with 6 clusters of db-scan
+
+```{r}
+boxplot(classe1$dataFLotteopt.Wifi,classe2$dataFLotteopt.Wifi,classe3$dataFLotteopt.Length..ft.,classe4$dataFLotteopt.Wifi,classe5$dataFLotteopt.Wifi,classe6$dataFLotteopt.Wifi,col="blue")
+
+```
+ 
+option video with 6 clusters of db-scan
+ 
+```{r}
+
+boxplot(classe1$dataFLotteopt.Video,classe2$dataFLotteopt.Video,classe3$dataFLotteopt.Video,classe4$dataFLotteopt.Video,classe5$dataFLotteopt.Video,classe6$dataFLotteopt.Video,col="red")
+
+```
+option power with 6 clusters of db-scan
+
+```{r}
+
+boxplot(classe1$dataFLotteopt.Power,classe2$dataFLotteopt.Power,classe3$dataFLotteopt.Power,classe4$dataFLotteopt.Power,classe5$dataFLotteopt.Power,classe6$dataFLotteopt.Power.Video,col="yellow")
+
+```
+option satellite with 6 clusters of db-scan
+
+```{r}
+
+boxplot(classe1$dataFLotteopt.Satellite,classe1$dataFLotteopt.Satellite,classe1$dataFLotteopt.Satellite,classe1$dataFLotteopt.Satellite,classe1$dataFLotteopt.Satellite,classe1$dataFLotteopt.Satellite,col="red3")
+
+
+
+```
+noise points are those which represent the planes seen in acp of which they are correlated with the 2nd axis and contain the option satellite
+Example: airline 10 and 12 with type Boeing
+
+option flatbed with 6 clusters of db-scan
+
+```{r}
+
+boxplot(classe1$dataFLotteopt.Flat.bed,classe2$dataFLotteopt.Flat.bed,classe3$dataFLotteopt.Flat.bed,classe4$dataFLotteopt.Flat.bed,classe5$dataFLotteopt.Flat.bed,classe6$dataFLotteopt.Flat.bed,col="grey")
+
+```
+
+Conclusion:
+
+* cluster1 (green): these planes are generally equipped with wifi and video options and they are medium-sized planes because of their length compared to the planes of the other segments, for example vions 13: Boeing 737- 900ER (739) and 16: Boeing 757-200 (75E) that exists in the center of plan (1,2) in the ACP 
+
+*cluster2 (red): these planes are larger than clluster1 but they are medium-sized remains, they are characterized by the existence of the wifi option as aircraft number 22: Boeing 757-300 
+
+* cluster3 (blue): it represents the largest planes of pt of view size, also the planes which are well equipped by the totality of the options, it is represented in blue in the graph of db-scan and granted corollated planes to the first axis in acp as aircraft 14: Boeing 747-400 (74S) 
+
+*cluster4 (sky blue):represents the moderately large size class (close to cluster3 size) also the most equipped aircraft by video option like aircraft number 8 Airbus A330-300 
+
+*cluster5 (pink): represents smaller planes that are not equipped with any option (are the planes designed for economy class) such as aircraft number 35: CRJ 100/200 ExpressJet , 38: E120 and 41: ERJ-145. 
+
+* cluster6 (gray): represents airplanes of the eco-comfort class generally with some space for the first class so they are equipped with the option wifi and a size larger than those of class planes economic
+
+*the noise points: represent the well-equipped planes by the satellite option like the plane 10 and 12 
+
+##Studing Other options in differents clusters with CA:
+
+to study other aspects of the world fleet we used another richer database 
+
+```{r }
+allplaines=read.table("AllAirPlanes.csv",header = TRUE,dec = ".", sep = ",")
+head(allplaines)
+```
+
+We will opt in this part to do the CA to release the average profile of the world fleet and to make it we transformed our base into a table of contingencies
+
+```{r }
+feqTab=read.table("AFCflotte.txt",header = TRUE,dec = ".",sep = ",")
+head(feqTab)
+feqTab=feqTab[,3:25]
+dt <- as.table(as.matrix (feqTab))
+
+ress=CA(feqTab,graph = TRUE)
+plot.CA(ress,invisible = "col",axes =3:4)
+plot.CA(ress,invisible = "col",axes =1:2)
+plot.CA(ress,invisible = "col",axes =c(1,4))
+plot.CA(ress,invisible = "col",axes =c(1,3))
+plot.CA(ress,invisible = "col",axes =c(2,4))
+plot.CA(ress,invisible = "col",axes =c(2,3))
+
+plot.CA(ress,invisible = "row",axes =3:4)
+plot.CA(ress,invisible = "row",axes =1:2)
+plot.CA(ress,invisible = "row",axes =c(1,4))
+plot.CA(ress,invisible = "row",axes =c(1,3))
+plot.CA(ress,invisible = "row",axes =c(2,4))
+plot.CA(ress,invisible = "row",axes =c(2,3))
+
+
+ress$col$contrib
+```
+
+
+
+the characteristics of the average profile are all around the origin, by examining the coordinates of the variables, we found that the average global profile is summarized as follows:
+
+Seat:recliner 
+
+Wfi:No_wifi
+
+Power :some seats 
+
+video:Portable TV satellite TV et seatback tv
+
+classe : Premium economy , first class , business class
+
+## Modeling
+
+```{r }
+#ACP
+library(FactoMineR)
+result_pca <- PCA(data[,2:33], graph = FALSE, ncp=3)
+result_pca
+plot(result_pca)
+
+
+```
+
+
+```{r }
+
+library("factoextra")
+eig.val <- get_eigenvalue(result_pca)
+eig.val
+
+fviz_eig(result_pca, addlabels = TRUE, ylim = c(0, 50))
+
+```
+
+
+```{r }
+fviz_pca_var(result_pca, col.var = "cos2",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = TRUE # Évite le chevauchement de texte,
+             
+)
+
+```
+
+
+
+```{r }
+library("rgl")
+plot3d(x=result_pca$ind$coord[,"Dim.1"],y=result_pca$ind$coord[,"Dim.2"],z=result_pca$ind$coord[,"Dim.3"],xlab = "dim1",choix = "ind",ylab = "dim2",zlab = "dim3")
+
+
+```
+
+## CAH clustering taking into account outliers
+```{r }
+#centrage et réduction
+data_scale=scale(data[,c(2:33)])
+d=dist(data_scale,method="manhattan")
+cah <- hclust(d, method="ward.D2")
+barplot(cah$height) 
+
+```
+
+```{r }
+#visualisation du methode
+plot(cah) 
+
+groupes.cah <- cutree(cah,k=4 )
+plot(groupes.cah)
+table(groupes.cah)
+barplot(table(groupes.cah))
+#segmentation n'est pas équitable
+
+```
+
+```{r }
+fviz_cos2(result_pca, choice = "var", axes = 1:2)
+
+```
+
+
+```{r }
+inertie <- sort(cah$height, decreasing = TRUE)
+plot(inertie[1:10], type = "s", xlab = "Nombre de classes", 
+     ylab = "Inertie")
+points(c(2, 3, 4,6), inertie[c(2, 3,4,6)], col = c("green3", 
+                                               "red3", "blue3","yellow3"), cex = 2, lwd = 3)
+
+
+```
+
+```{r }
+plot(cah, labels = FALSE, main = "Partition en 2, 3,4 ou 5 classes", 
+     xlab = "", ylab = "", sub = "", axes = FALSE, hang = -1)
+rect.hclust(cah, 2, border = "green3")
+rect.hclust(cah, 3, border = "red3")
+rect.hclust(cah, 4, border = "blue3")
+rect.hclust(cah, 6, border = "yellow3")
+
+```
+
+```{r }
+library(devtools)
+library(JLutils)
+best.cutree(cah)
+#the best.cutree function looks what would be the best partition between 2, 3,4 and 6 classes
+#The partition into 4 classes will be best depending on the result.
+best.cutree(cah, graph = TRUE, xlab = "Nombre de classes", 
+            ylab = "Inertie relative")
+
+```
+
+```{r }
+library(RColorBrewer)
+A2Rplot(cah, k = 4, boxes = FALSE, col.up = "gray50", 
+        col.down = brewer.pal(4, "Dark2"), show.labels = FALSE)
+
+```
+
+```{r }
+library(pvclust)
+fit <- pvclust(data_scale, method.hclust="ward.D2",
+               method.dist="euclidean")
+plot(fit) # dendogram with p values
+# add rectangles around groups highly supported by the data
+pvrect(fit, alpha=.95)
+
+```
+
+```{r }
+#clustering en éliminant les points abbérants
+
+data_scale_spab=scale(data[-2,c(2:33)])
+
+d1=dist(data_scale_spab,method="manhattan")
+
+cah2 <- hclust(d1, method="ward.D2")
+plot(cah2) 
+
+groupes.cah <- cutree(cah2,k=3)
+
+```
+
+```{r }
+plot(groupes.cah)
+table(groupes.cah)
+barplot(table(groupes.cah))
+#segmentation n'est pas équitable
+
+```
+
+
+
+## HCPC (CAH+ACP)
+The HCPC function (Hierarchical Classification on Principal Components) allows unsupervised classification of individuals. This function combines the main factors, heroic classification and partitioning to better visualize and emphasize the similarities between individuals.
+HCPC performs both the calculation of the distance matrix, the dendrogram and the partitioning of the population into classes.
+
+```{r }
+plot(cah2) 
+res <- HCPC(result_pca,graph = FALSE)
+
+
+```
+
+```{r }
+plot(res, choice = "tree" )
+#donner Graphique 3D combinant la classification hiérarchique et le plan des facteurs(visualisation)
+# Principal components + tree
+plot(res, choice = "3D.map")
+plot(res, choice = "bar")
+
+plot(res, choice = "map")
+
+```
+
+```{r }
+fviz_dend(res, 
+          cex = 0.7,                     # Taille du text
+          palette = "jco",               # Palette de couleur ?ggpubr::ggpar
+          rect = TRUE, rect_fill = TRUE, # Rectangle autour des groupes
+          rect_border = "jco",           # Couleur du rectangle
+          labels_track_height = 0.8 )
+
+#le dendograme suggère une solution de 4 groupes
+fviz_cluster(res,
+            repel = TRUE,            # Evite le chevauchement des textes
+            show.clust.cent = TRUE, # Montre le centre des clusters
+            palette = "jco",         # Palette de couleurs, voir ?ggpubr::ggpar
+            ggtheme = theme_minimal(),
+            main = "Factor map"
+)
+
+
+```
+
+## K-means
+
+K-Means clustering taking into account outliers with 4 clusters
+
+
+```{r }
+fit <- kmeans(data_scale, 4)
+# vary parameters for most readable graph
+
+library(cluster) 
+clusplot(data_scale, fit$cluster, color=TRUE, shade=TRUE, 
+         labels=2, lines=0)
+
+groupes.kmeans <- kmeans(data_scale,centers=3,nstart=4)
+#affichage des résultats
+print(groupes.kmeans)
+
+```
+
+## method validation
+
+## elbow method
+
+One method to validate the number of clusters is the elbow method. 
+The idea of the elbow method is to run k-means clustering on the dataset for a range of values of k
+(say, k from 1 to 10 in the examples above), and for each value of k calculate the sum of squared errors (SSE)
+
+```{r }
+fviz_nbclust(data_scale, kmeans, method = "wss") +
+  geom_vline(xintercept = 4, linetype = 2)+
+  labs(subtitle = "Elbow method")
+
+
+
+```
+
+## Silhouette method
+
+```{r }
+fviz_nbclust(data_scale, kmeans, method = "silhouette")+
+  labs(subtitle = "Silhouette method")
+
+```
+
+## Calinsky criterion
+
+```{r }
+
+library(fpc)
+
+sol.kmeans <- kmeansruns(data_scale,krange=2:10,criterion="ch")
+plot(1:10,sol.kmeans$crit,type="b",xlab="Nb. de groupes",ylab="Silhouette")
+
+#From k = 4 clusters, the addition of an additional group does not "significantly" increase the share of inertia explained by the partition.
+
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
